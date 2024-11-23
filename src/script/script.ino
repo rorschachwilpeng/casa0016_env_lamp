@@ -17,7 +17,7 @@
 #define REFRESHFREUENCY 60 // LED refresh frequency
 
 /* Macro definitions of SCD30*/
-#define INIT_TIMES 2 // Number of measurements for initialization. Suggested range: [2,5]
+#define INIT_TIMES 5 // Number of measurements for initialization. Suggested range: [2,5]
 
 /* Define the LCD refresh rate in milliseconds */
 #define LCD_INTERVAL 2000 // The refresh interval is 2 seconds
@@ -57,12 +57,15 @@ bool isInitialized = false; // Initialization marker
 // CO2
 static float defaultCO2 = 0;
 int MaxCO2=0;
+int MinCO2=0;
 // Temp
 static float defaultTemperature = 0;
 int MaxTemp=0;
+int MinTemp=0;
 // Humidity
 static float defaultHumidity = 0;
 int MaxHumid=0;
+int MinHumid=0;
 
 //////  Encoder
 float last_degrees = -1; // Used to store the angle of the last read, the initial value is set to an invalid angle
@@ -166,6 +169,47 @@ float getSensorData() {
   }
 }
 
+// Initialization
+void setInitialData(int init_time) {
+  if (isFirstData) {
+    // Skip the first set of data
+    isFirstData = false;
+  } else if (!isInitialized) {
+      Serial.println("Initializing");
+      lcd.clear();
+      lcd.print("Initializing...");
+      // Collect data and calculate the average
+      sumCO2 += scd30.CO2;
+      sumTemperature += scd30.temperature;
+      sumHumidity += scd30.relative_humidity;
+
+      dataCount++;
+      // Check if sufficient data points have been collected
+      if (dataCount == init_time) {
+        
+        //temp
+        defaultTemperature = sumTemperature / init_time;
+        MinTemp = defaultTemperature - 15;
+        MaxTemp = defaultTemperature + 15;
+        //CO2
+        defaultCO2 = sumCO2 / init_time;
+        MinCO2 = defaultCO2 - 1000;
+        MaxCO2 = defaultCO2 + 5000;
+        //humiditiy
+        defaultHumidity = sumHumidity / init_time;
+        MinHumid = defaultHumidity - 40;
+        MaxHumid = defaultHumidity + 40;
+        Serial.print("Default CO2: ");
+        Serial.println(defaultCO2);
+        Serial.print("Default Temperature: ");
+        Serial.println(defaultTemperature);
+        Serial.print("Default Humidity: ");
+        Serial.println(defaultHumidity);
+        isInitialized = true; // Set the initialization flag
+      }
+  }
+}
+
 // Map the Encoder rotation angle to the datatype
 int mapAngleToDataType(float angle) {
     if (angle >= 0 && angle <= 60) return 1; // Temperature
@@ -189,84 +233,87 @@ void displaySelectionOnLCD(float angle) {
 }
 
 // LED light logic
-void lightingLED(int sen_val) { 
-  // If initialization is not complete, do not proceed
-  if (!isInitialized) return;
+void lightingLED(float sen_val) {
+    if (!isInitialized) return; // Skip if not initialized
 
-  // Adjust brightness to control the breathing light effect
-  brightness += brightnessDirection * 5; // Adjust brightness step size to 5
-  if (brightness >= 255 || brightness <= 0) { // Adjust breathing range
-    brightnessDirection *= -1; // Reverse brightness direction
-  }
+    // Breathing effect adjustment
+    brightness += brightnessDirection * 5;
+    if (brightness >= 255 || brightness <= 0) {
+        brightnessDirection *= -1; // Reverse brightness direction
+    }
 
-  // Map concentration ranges
-  int tar_color = -1; // Target color
-  if (selectedDataType == 1) { // Temperature
-    MaxTemp = defaultTemperature + 15;
-    tar_color = map(scd30.temperature, defaultTemperature, MaxTemp, 0, 255);
+    int tar_color = -1; // Target color intensity
+    int targetRed = 0, targetGreen = 0, targetBlue = 0; // RGB values
 
-  } else if (selectedDataType == 2) { // Humidity
-    MaxHumid = defaultHumidity + 15;
-    tar_color = map(scd30.relative_humidity, defaultHumidity, MaxHumid, 0, 255); 
+    if (selectedDataType == 3) { // CO2
+        // Map CO2 to green-to-red transition
+        tar_color = map(sen_val, defaultCO2, MaxCO2, 0, 255);
+        tar_color = constrain(tar_color, 0, 255); // Clamp target color
 
-  } else if (selectedDataType == 3) { // CO2
-    MaxCO2 = defaultCO2 + 5000;
-    tar_color = map(scd30.CO2, defaultCO2, MaxCO2, 0, 255);
-  }
+        // Green to Red transition
+        targetRed = map(tar_color, 0, 255, 0, 255); // Increase red
+        targetGreen = map(tar_color, 0, 255, 255, 0); // Decrease green
+        targetBlue = 0; // No blue in CO2 mode
+    } else {
+        // Retain existing logic for temperature and humidity
+        float hysteresis = (selectedDataType == 1 || selectedDataType == 2) ? 1.5 : 0;
+        if (selectedDataType == 1) { // Temperature
+            if (sen_val < defaultTemperature - hysteresis) { // Blue to Green
+                tar_color = map(sen_val, MinTemp, defaultTemperature - hysteresis, 255, 0);
+                targetRed = 0;
+                targetGreen = map(tar_color, 255, 0, 0, 255);
+                targetBlue = map(tar_color, 255, 0, 255, 0);
+            } else if (sen_val > defaultTemperature + hysteresis) { // Green to Red
+                tar_color = map(sen_val, defaultTemperature + hysteresis, MaxTemp, 0, 255);
+                targetRed = map(tar_color, 0, 255, 0, 255);
+                targetGreen = map(tar_color, 0, 255, 255, 0);
+                targetBlue = 0;
+            }
+        } else if (selectedDataType == 2) { // Humidity
+            if (sen_val < defaultHumidity - hysteresis) { // Blue to Green
+                tar_color = map(sen_val, MinHumid, defaultHumidity - hysteresis, 255, 0);
+                targetRed = 0;
+                targetGreen = map(tar_color, 255, 0, 0, 255);
+                targetBlue = map(tar_color, 255, 0, 255, 0);
+            } else if (sen_val > defaultHumidity + hysteresis) { // Green to Red
+                tar_color = map(sen_val, defaultHumidity + hysteresis, MaxHumid, 0, 255);
+                targetRed = map(tar_color, 0, 255, 0, 255);
+                targetGreen = map(tar_color, 0, 255, 255, 0);
+                targetBlue = 0;
+            }
+        }
+    }
 
-  tar_color = constrain(tar_color, 0, 255); // Limit the range to 0-255
-  int targetRed = map(tar_color, 0, 255, 0, 255);
-  int targetGreen = map(tar_color, 0, 255, 255, 0);
-  int targetBlue = 0;
+    // Smooth color transitions
+    if (tar_color >= 0) {
+        static int lastRed = 0, lastGreen = 255, lastBlue = 0;
+        const float SMOOTH_FACTOR = 0.1; // Smoothing factor
+        lastRed += (targetRed - lastRed) * SMOOTH_FACTOR;
+        lastGreen += (targetGreen - lastGreen) * SMOOTH_FACTOR;
+        lastBlue += (targetBlue - lastBlue) * SMOOTH_FACTOR;
 
-  // Use a smoothing logic to make the color transition slowly
-  static int lastRed = 0, lastGreen = 255, lastBlue = 0;
-  lastRed += (targetRed - lastRed) * 0.05; // Smoothing factor adjusted to 0.05
-  lastGreen += (targetGreen - lastGreen) * 0.05;
-  lastBlue += (targetBlue - lastBlue) * 0.05;
+        // Adjust brightness for breathing effect
+        int adjustedRed = (lastRed * brightness) / 255;
+        int adjustedGreen = (lastGreen * brightness) / 255;
+        int adjustedBlue = (lastBlue * brightness) / 255;
 
-  // Adjust the brightness to create a breathing light effect
-  int adjustedRed = (lastRed * brightness) / 255;
-  int adjustedGreen = (lastGreen * brightness) / 255;
-  int adjustedBlue = (lastBlue * brightness) / 255;
-
-  // Update LED colors
-  for (int i = 0; i < NUMPIXELS; i++) {
-    pixels.setPixelColor(i, pixels.Color(adjustedRed, adjustedGreen, adjustedBlue));
-  }
-  pixels.show();
+        // Update LED colors
+        for (int i = 0; i < NUMPIXELS; i++) {
+            pixels.setPixelColor(i, pixels.Color(adjustedRed, adjustedGreen, adjustedBlue));
+        }
+        pixels.show();
+    }
 }
 
-// Initialization
-void setInitialData(int init_time) {
-  if (isFirstData) {
-    // Skip the first set of data
-    isFirstData = false;
-  } else if (!isInitialized) {
-      Serial.println("Initializing");
-      lcd.clear();
-      lcd.print("Initializing...");
-      // Collect data and calculate the average
-      sumCO2 += scd30.CO2;
-      sumTemperature += scd30.temperature;
-      sumHumidity += scd30.relative_humidity;
 
-      dataCount++;
-      // Check if sufficient data points have been collected
-      if (dataCount == init_time) {
-        defaultCO2 = sumCO2 / init_time;
-        defaultTemperature = sumTemperature / init_time;
-        defaultHumidity = sumHumidity / init_time;
-        Serial.print("Default CO2: ");
-        Serial.println(defaultCO2);
-        Serial.print("Default Temperature: ");
-        Serial.println(defaultTemperature);
-        Serial.print("Default Humidity: ");
-        Serial.println(defaultHumidity);
-        isInitialized = true; // Set the initialization flag
-      }
-  }
+// Stronger smoothing for CO2
+float smoothCO2(float currentCO2) {
+    static float smoothedCO2 = 400; // Initial value
+    const float SMOOTH_FACTOR = 0.02; // Smaller factor for stronger smoothing
+    smoothedCO2 = smoothedCO2 + SMOOTH_FACTOR * (currentCO2 - smoothedCO2);
+    return smoothedCO2;
 }
+
 
 // LCD and serial monitor IO
 void displaySensorData() {
