@@ -13,13 +13,20 @@
 
 /* Macro definitions of LED */
 #define PIN 13
-#define NUMPIXELS 20
-#define DELAYVAL 100 // 减少延迟以使呼吸灯变化更快
+#define NUMPIXELS 60
+#define REFRESHFREUENCY 60 // LED refresh frequency
 
-/* Macro definitions of CO2 */
-#define MIN_CO2 0    // max co2 value
-#define MAX_CO2 20000 // min co2 value
+/* Macro definitions of SCD30*/
 #define INIT_TIMES 2 // how many time you wanna measrue for the init? Suggested range:[2,5]
+
+/* Define the LCD refresh rate in milliseconds */
+#define LCD_INTERVAL 2000 //The refresh interval is 2 second
+
+/* Define the LED refresh rate in milliseconds */
+#define LED_INTERVAL 60
+
+
+
 /********* ---------------------------------------------------------------------------------------------------------------------------------------------------------------- ********/
 /* Components */
 Adafruit_NeoPixel pixels(NUMPIXELS, PIN);
@@ -29,22 +36,33 @@ LiquidCrystal_PCF8574 lcd(0x27);
 Adafruit_SCD30 scd30;
 
 /* Component variables */
+static bool isDataSelected = false; 
+int displayIndex = 0; // display current data index
+static int selectedDataType=0;
+
 ////// LED
 int brightness = 0; // init luminance
 int brightnessDirection = 1; // Controls the direction of brightness change, 1 is to increase, -1 is to decrease
-int displayIndex = 0; // display current data index
-int selectedDataType=0;
-static bool isDataSelected = false; 
+static unsigned long lastLEDTime = 0;
+float globalBrightnessFactor = 1.0; // 全局亮度修饰因子，范围 [0.0, 1.0]
+
+////// LCD
+unsigned long lastDisplayTime = 0; // The last time it was displayed
 
 //////  CO2 Sensor
-static float defaultCO2 = 0;
-static float defaultTemperature = 0;
-static float defaultHumidity = 0;
 bool isFirstData = true; // First time receive marker
 static int dataCount = 0; // how many time collteced already
 static float sumCO2 = 0, sumTemperature = 0, sumHumidity = 0; // sum val
-int MaxCO2=defaultCO2+5000;// realtive maximum = default+5000
 bool isInitialized = false; // marker
+//CO2
+static float defaultCO2 = 0;
+int MaxCO2=0;
+//temp
+static float defaultTemperature = 0;
+int MaxTemp=0;
+//humid
+static float defaultHumidity = 0;
+int MaxHumid=0;
 
 //////  Encoder
 float last_degrees = -1; // Used to store the angle of the last read, the initial value is set to an invalid angle
@@ -66,89 +84,43 @@ void setup() {
   pixels.begin();
 }
 
-// void loop() {
-//   static unsigned long lastTime = 0; // 记录上次更新LED灯的时间
-//   unsigned long currentTime = millis();
-
-//   // 检查SCD30是否有新的数据准备好
-//   if (scd30.dataReady() && (currentTime - lastTime > DELAYVAL)) {
-//     if (!scd30.read()) {
-//       Serial.println("Error reading sensor data");
-//     } else {
-//       // 数据准备好了
-//       setInitialData(INIT_TIMES);
-//       if (isInitialized && defaultCO2 != 0 && defaultTemperature != 0 && defaultHumidity != 0) {
-         
-//         //displaySensorData(); // 显示传感器数据
-//       }
-//       lastTime = currentTime; // 更新LED灯的时间
-//     }
-//   }
-//   getEncoderStage();
-//   lightingLED(); // 呼吸灯效果
-//   delay(10); // 短暂延迟以减少CPU负载
-// }
-
 void loop() {
+  unsigned long currentTime = millis();
+
   if (!isDataSelected) {// waiting for user's datatype choice, default --> CO2
       handleUserSelection();
   } else{
-      handleLEDLogic();
-      //TODO:1.将user selection作为一
-    // if (scd30.dataReady() && (currentTime - lastTime > DELAYVAL)) {//CO2 sensor is working
-    //   handleLEDLogic();
-    // } else{//CO2 sensor is not working
-
-    // }
-
+      float sensor_val = getSensorData();
+      if (isInitialized && defaultCO2 != 0 && defaultTemperature != 0 && defaultHumidity != 0) {
+          // LCD and IO update
+          if (currentTime - lastDisplayTime >= LCD_INTERVAL) {
+            displaySensorData();
+            lastDisplayTime = currentTime;//update display time 
+          }
+          // LED update
+          if (currentTime - lastLEDTime >= LED_INTERVAL) {
+              adjustGlobalBrightnessFactor(); // 调整全局亮度
+              lightingLED(sensor_val); // Control the breathing light
+              lastLEDTime = currentTime;
+          }
+      }   
   }
-
-  delay(10);
-
-  // static unsigned long lastTime = 0; // 记录上次更新LED灯的时间
-  // unsigned long currentTime = millis();
-
-  // // 检查SCD30是否有新的数据准备好
-  // if (scd30.dataReady() && (currentTime - lastTime > DELAYVAL)) {
-  //   if (scd30.read()) {
-  //     // 让用户选择影响光源的传感数据类型
-
-
-
-
-
-  //     setInitialData(INIT_TIMES);
-  //     if (isInitialized && defaultCO2 != 0 && defaultTemperature != 0 && defaultHumidity != 0) {
-  //       //displaySensorData(); // 显示传感器数据
-  //     }
-  //     lastTime = currentTime; // 更新LED灯的时间
-      
-  //   } else {
-  //     Serial.println("Error reading sensor data");
-  //   }
-  // }
-  // lightingLED(); // 呼吸灯效果
-  // delay(10); // 短暂延迟以减少CPU负载
+  delay(10); // Short delay to reduce CPU load
 }
 
 /********* ---------------------------------------------------------------------------------------------------------------------------------------------------------------- ********/
-
-
-
 // Encoder logic
 float getEncoderStage(){
     // 读取旋钮传感器的模拟值
     int sensor_value = analogRead(ROTARY_ANGLE_SENSOR);
-    
     // 将传感器值转换为电压
     float voltage = (float)sensor_value * ADC_REF / 1023;
-
     // 将电压转换为角度（单位：度）
     float degrees = (voltage * FULL_ANGLE) / GROVE_VCC;
-
     return degrees;
 }
 
+// user select the datatyple(which sensor data used to control the LED)
 void handleUserSelection() {
     static unsigned long stableStartTime = 0; // 开始计时的时间戳
     static float lastStableAngle = -1;       // 上一次稳定角度
@@ -174,25 +146,37 @@ void handleUserSelection() {
     }
 }
 
-
-void handleLEDLogic() {
-    // 根据 selectedDataType 的值处理传感器数据并控制LED
-    if (selectedDataType == 1) {
-        // 温度控制LED
-    } else if (selectedDataType == 2) {
-        // 湿度控制LED
-    } else if (selectedDataType == 3) {
-        // CO2控制LED
+// grab the specific sensor data
+float getSensorData() {
+  // check SCD30 aviliability 
+  if (scd30.dataReady()){
+    if (scd30.read()) {
+      // Initalization
+      setInitialData(INIT_TIMES);
+    } else {
+      Serial.println("Error reading sensor data");
     }
+  }
+
+  // 根据 selectedDataType 的值处理传感器数据并控制LED
+  if (selectedDataType == 1) {// 温度控制LED
+      return scd30.temperature;
+  } else if (selectedDataType == 2) {// 湿度控制LED
+      return scd30.relative_humidity;
+  } else if (selectedDataType == 3) {//CO2
+      return scd30.CO2;
+  }
 }
 
+// Map the Encoder rotation angle to the datatype
 int mapAngleToDataType(float angle) {
-    if (angle >= 0 && angle <= 60) return 1; // 温度
-    if (angle > 60 && angle <= 120) return 2; // 湿度
-    if (angle > 120 && angle <= 200) return 3; // CO2
-    return -1; // 无效数据
+    if (angle >= 0 && angle <= 60) return 1; // temperature
+    if (angle > 60 && angle <= 120) return 2; // humidity
+    if (angle > 120 && angle <= 210) return 3; // CO2
+    return 3; // default as CO2
 }
 
+// display selection text on the LCD
 void displaySelectionOnLCD(float angle) {
     if (angle >= 0 && angle <= 60) {
         lcd.clear();
@@ -206,18 +190,22 @@ void displaySelectionOnLCD(float angle) {
     }
 }
 
+void adjustGlobalBrightnessFactor() {
+    // 获取旋钮角度
+    float angle = getEncoderStage(); 
+    
+    // 将角度映射到全局亮度因子范围 [0.2, 1.0]
+    float targetFactor = map(angle, 0, FULL_ANGLE, 0.2 * 100, 1.0 * 100) / 100.0;
+    targetFactor = constrain(targetFactor, 0.2, 1.0); // 限制范围
+
+    // 平滑调整亮度因子，避免跳变
+    globalBrightnessFactor += (targetFactor - globalBrightnessFactor) * 0.2; // 平滑因子 0.2 可调整
+}
+
 // LED light logic
-void lightingLED() {
+void lightingLED(int sen_val) { 
   // 如果没有完成初始化，不执行逻辑
   if (!isInitialized) return;
-
-  // 定义静态变量用于时间控制
-  static unsigned long lastUpdate = 0;       // 上次更新的时间
-  const unsigned long updateInterval = 60;  // 调整更新频率
-
-  unsigned long currentTime = millis();
-  if (currentTime - lastUpdate < updateInterval) return; // 控制更新频率
-  lastUpdate = currentTime; // 更新时间
 
   // 调整亮度，控制呼吸灯效果
   brightness += brightnessDirection * 5; // 调整亮度步长为5
@@ -225,12 +213,24 @@ void lightingLED() {
     brightnessDirection *= -1; // 反转亮度变化方向
   }
 
-  // 根据CO2浓度设置目标颜色
-  int co2Level = map(scd30.CO2, defaultCO2, MaxCO2, 0, 255); // 映射浓度范围
-  co2Level = constrain(co2Level, 0, 255); // 限制在0到255之间
+  //map concentration ranges
+  int tar_color=-1;//target color
+  if (selectedDataType==1){// temperature
+    MaxTemp=defaultTemperature+15;
+    tar_color = map(scd30.temperature, defaultTemperature, MaxTemp, 0, 255);
 
-  int targetRed = map(co2Level, 0, 255, 0, 255);
-  int targetGreen = map(co2Level, 0, 255, 255, 0);
+  } else if(selectedDataType==2){// humidity
+    MaxHumid=defaultHumidity+15;
+    tar_color = map(scd30.relative_humidity, defaultHumidity, MaxHumid, 0, 255); 
+
+  } else if(selectedDataType==3){// CO2
+    MaxCO2=defaultCO2+5000;
+    tar_color = map(scd30.CO2, defaultCO2, MaxCO2, 0, 255);
+  }
+
+  tar_color = constrain(tar_color, 0, 255); // 限制在0到255之间
+  int targetRed = map(tar_color, 0, 255, 0, 255);
+  int targetGreen = map(tar_color, 0, 255, 255, 0);
   int targetBlue = 0;
 
   // 使用平滑过渡逻辑让颜色缓慢变化
@@ -239,10 +239,15 @@ void lightingLED() {
   lastGreen += (targetGreen - lastGreen) * 0.05;
   lastBlue += (targetBlue - lastBlue) * 0.05;
 
-  // 调整颜色亮度，形成呼吸灯效果
+  // // 调整颜色亮度，形成呼吸灯效果
   int adjustedRed = (lastRed * brightness) / 255;
   int adjustedGreen = (lastGreen * brightness) / 255;
   int adjustedBlue = (lastBlue * brightness) / 255;
+
+ // 调整颜色亮度，同时叠加全局亮度因子
+    // int adjustedRed = (lastRed * brightness * globalBrightnessFactor) / (255 * 255);
+    // int adjustedGreen = (lastGreen * brightness * globalBrightnessFactor) / (255 * 255);
+    // int adjustedBlue = (lastBlue * brightness * globalBrightnessFactor) / (255 * 255);
 
   // 更新LED颜色
   for (int i = 0; i < NUMPIXELS; i++) {
@@ -285,7 +290,6 @@ void setInitialData(int init_time) {
 // LCD and serial monitor IO
 void displaySensorData() {
   lcd.clear(); // 清除LCD显示
-
   //IO
   Serial.print("CO2: ");
   Serial.print(scd30.CO2, 3);
