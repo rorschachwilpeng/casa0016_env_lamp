@@ -5,6 +5,7 @@
 # include <LiquidCrystal_PCF8574.h>
 
 /********* ---------------------------------------------------------------------------------------------------------------------------------------------------------------- ********/
+//test
 /* Macro definitions of Rotary angle sensor */
 #define ROTARY_ANGLE_SENSOR A0
 #define ADC_REF 5       // Reference voltage of ADC is 5V
