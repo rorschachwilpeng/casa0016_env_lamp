@@ -1,39 +1,63 @@
+// Headers
 #include <LiquidCrystal.h>
 #include <Adafruit_SCD30.h>
 #include <Adafruit_NeoPixel.h>
+# include <LiquidCrystal_PCF8574.h>
 
+/********* ---------------------------------------------------------------------------------------------------------------------------------------------------------------- ********/
+/* Macro definitions of Rotary angle sensor */
+#define ROTARY_ANGLE_SENSOR A0
+#define ADC_REF 5       // Reference voltage of ADC is 5V
+#define GROVE_VCC 5     // VCC of the Grove interface is normally 5V
+#define FULL_ANGLE 300  // Full value of the rotary angle is 300 degrees
+
+/* Macro definitions of LED */
 #define PIN 13
 #define NUMPIXELS 20
 #define DELAYVAL 100 // 减少延迟以使呼吸灯变化更快
-#define MIN_CO2 0    // CO2浓度的最小值
-#define MAX_CO2 20000 // CO2浓度的最大值
 
+/* Macro definitions of CO2 */
+#define MIN_CO2 0    // max co2 value
+#define MAX_CO2 20000 // min co2 value
+#define INIT_TIMES 2 // how many time you wanna measrue for the init? Suggested range:[2,5]
+/********* ---------------------------------------------------------------------------------------------------------------------------------------------------------------- ********/
+/* Components */
 Adafruit_NeoPixel pixels(NUMPIXELS, PIN);
-
-// 初始化LCD对象，将LCD的控制引脚与Arduino的数字引脚关联
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
-
+// set I2C address
+LiquidCrystal_PCF8574 lcd(0x27);
+// set SCD30
 Adafruit_SCD30 scd30;
 
-// LED
-int brightness = 0; // 初始亮度
-int brightnessDirection = 1; // 控制亮度变化的方向，1为增加，-1为减少
-int displayIndex = 0; // 当前显示的数据索引
+/* Component variables */
+////// LED
+int brightness = 0; // init luminance
+int brightnessDirection = 1; // Controls the direction of brightness change, 1 is to increase, -1 is to decrease
+int displayIndex = 0; // display current data index
+int selectedDataType=0;
+static bool isDataSelected = false; 
 
-// Sensor Data
+//////  CO2 Sensor
 static float defaultCO2 = 0;
 static float defaultTemperature = 0;
 static float defaultHumidity = 0;
 bool isFirstData = true; // First time receive marker
-static int dataCount = 0; // 已收集数据的次数
-static float sumCO2 = 0, sumTemperature = 0, sumHumidity = 0; // 用于计算平均值
-int MaxCO2=defaultCO2+5000;
-bool isInitialized = false; // 标志，表示是否已完成初始化
+static int dataCount = 0; // how many time collteced already
+static float sumCO2 = 0, sumTemperature = 0, sumHumidity = 0; // sum val
+int MaxCO2=defaultCO2+5000;// realtive maximum = default+5000
+bool isInitialized = false; // marker
 
+//////  Encoder
+float last_degrees = -1; // Used to store the angle of the last read, the initial value is set to an invalid angle
+/********* ---------------------------------------------------------------------------------------------------------------------------------------------------------------- ********/
 void setup() {
-  lcd.begin(16, 2);
   Serial.begin(115200);
+
+  // Encoder 
+  pinMode(ROTARY_ANGLE_SENSOR, INPUT); // Set the knob sensor pin as input
+  //LCD 
+  lcd.begin(16, 2);
+  lcd.setBacklight(255); //set the lightness to the maximum
+  // SCD30
   if (!scd30.begin()) {
     Serial.println("Failed to find SCD30 chip");
     while (1) { delay(10); }
@@ -42,28 +66,147 @@ void setup() {
   pixels.begin();
 }
 
-void loop() {
-  static unsigned long lastTime = 0; // 记录上次更新LED灯的时间
-  unsigned long currentTime = millis();
+// void loop() {
+//   static unsigned long lastTime = 0; // 记录上次更新LED灯的时间
+//   unsigned long currentTime = millis();
 
-  // 检查SCD30是否有新的数据准备好
-  if (scd30.dataReady() && (currentTime - lastTime > DELAYVAL)) {
-    if (!scd30.read()) {
-      Serial.println("Error reading sensor data");
-    } else {
-      // 数据准备好了
-      setInitialData(5);
-      if (isInitialized && defaultCO2 != 0 && defaultTemperature != 0 && defaultHumidity != 0) {
-        displaySensorData(); // 显示传感器数据
-      }
-      lastTime = currentTime; // 更新LED灯的时间
-    }
+//   // 检查SCD30是否有新的数据准备好
+//   if (scd30.dataReady() && (currentTime - lastTime > DELAYVAL)) {
+//     if (!scd30.read()) {
+//       Serial.println("Error reading sensor data");
+//     } else {
+//       // 数据准备好了
+//       setInitialData(INIT_TIMES);
+//       if (isInitialized && defaultCO2 != 0 && defaultTemperature != 0 && defaultHumidity != 0) {
+         
+//         //displaySensorData(); // 显示传感器数据
+//       }
+//       lastTime = currentTime; // 更新LED灯的时间
+//     }
+//   }
+//   getEncoderStage();
+//   lightingLED(); // 呼吸灯效果
+//   delay(10); // 短暂延迟以减少CPU负载
+// }
+
+void loop() {
+  if (!isDataSelected) {// waiting for user's datatype choice, default --> CO2
+      handleUserSelection();
+  } else{
+      handleLEDLogic();
+      //TODO:1.将user selection作为一
+    // if (scd30.dataReady() && (currentTime - lastTime > DELAYVAL)) {//CO2 sensor is working
+    //   handleLEDLogic();
+    // } else{//CO2 sensor is not working
+
+    // }
+
   }
 
-  lightingLED(); // 呼吸灯效果
-  delay(10); // 短暂延迟以减少CPU负载
+  delay(10);
+
+  // static unsigned long lastTime = 0; // 记录上次更新LED灯的时间
+  // unsigned long currentTime = millis();
+
+  // // 检查SCD30是否有新的数据准备好
+  // if (scd30.dataReady() && (currentTime - lastTime > DELAYVAL)) {
+  //   if (scd30.read()) {
+  //     // 让用户选择影响光源的传感数据类型
+
+
+
+
+
+  //     setInitialData(INIT_TIMES);
+  //     if (isInitialized && defaultCO2 != 0 && defaultTemperature != 0 && defaultHumidity != 0) {
+  //       //displaySensorData(); // 显示传感器数据
+  //     }
+  //     lastTime = currentTime; // 更新LED灯的时间
+      
+  //   } else {
+  //     Serial.println("Error reading sensor data");
+  //   }
+  // }
+  // lightingLED(); // 呼吸灯效果
+  // delay(10); // 短暂延迟以减少CPU负载
 }
 
+/********* ---------------------------------------------------------------------------------------------------------------------------------------------------------------- ********/
+
+
+
+// Encoder logic
+float getEncoderStage(){
+    // 读取旋钮传感器的模拟值
+    int sensor_value = analogRead(ROTARY_ANGLE_SENSOR);
+    
+    // 将传感器值转换为电压
+    float voltage = (float)sensor_value * ADC_REF / 1023;
+
+    // 将电压转换为角度（单位：度）
+    float degrees = (voltage * FULL_ANGLE) / GROVE_VCC;
+
+    return degrees;
+}
+
+void handleUserSelection() {
+    static unsigned long stableStartTime = 0; // 开始计时的时间戳
+    static float lastStableAngle = -1;       // 上一次稳定角度
+    float currentAngle = getEncoderStage();  // 获取当前旋钮角度
+
+    // 显示当前选择
+    displaySelectionOnLCD(currentAngle);
+
+    // 检查角度是否稳定
+    if (abs(currentAngle - lastStableAngle) <= 5) {
+        // 如果当前角度稳定在上一次角度范围内
+        if (millis() - stableStartTime > 3000) {
+            // 角度稳定超过3秒，认为用户已选择该模式
+            selectedDataType = mapAngleToDataType(currentAngle);
+            isDataSelected = true;
+            Serial.print("Selected Data Type: ");
+            Serial.println(selectedDataType);
+        }
+    } else {
+        // 如果当前角度发生变化，刷新稳定计时
+        stableStartTime = millis();
+        lastStableAngle = currentAngle;
+    }
+}
+
+
+void handleLEDLogic() {
+    // 根据 selectedDataType 的值处理传感器数据并控制LED
+    if (selectedDataType == 1) {
+        // 温度控制LED
+    } else if (selectedDataType == 2) {
+        // 湿度控制LED
+    } else if (selectedDataType == 3) {
+        // CO2控制LED
+    }
+}
+
+int mapAngleToDataType(float angle) {
+    if (angle >= 0 && angle <= 60) return 1; // 温度
+    if (angle > 60 && angle <= 120) return 2; // 湿度
+    if (angle > 120 && angle <= 200) return 3; // CO2
+    return -1; // 无效数据
+}
+
+void displaySelectionOnLCD(float angle) {
+    if (angle >= 0 && angle <= 60) {
+        lcd.clear();
+        lcd.print("Temperature");
+    } else if (angle > 70 && angle <= 130) {
+        lcd.clear();
+        lcd.print("Humidity");
+    } else if (angle > 140 && angle <= 200) {
+        lcd.clear();
+        lcd.print("CO2");
+    }
+}
+
+// LED light logic
 void lightingLED() {
   // 如果没有完成初始化，不执行逻辑
   if (!isInitialized) return;
@@ -108,10 +251,7 @@ void lightingLED() {
   pixels.show();
 }
 
-
-
-
-// Initialize data
+// Initialization
 void setInitialData(int init_time) {
   if (isFirstData) {
     // 跳过第一次数据
@@ -142,7 +282,7 @@ void setInitialData(int init_time) {
   }
 }
 
-// 函数：显示传感器数据
+// LCD and serial monitor IO
 void displaySensorData() {
   lcd.clear(); // 清除LCD显示
 
