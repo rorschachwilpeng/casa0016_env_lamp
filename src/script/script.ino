@@ -5,7 +5,6 @@
 # include <LiquidCrystal_PCF8574.h>
 
 /********* ---------------------------------------------------------------------------------------------------------------------------------------------------------------- ********/
-//test
 /* Macro definitions of Rotary angle sensor */
 #define ROTARY_ANGLE_SENSOR A0
 #define ADC_REF 5       // Reference voltage of ADC is 5V
@@ -18,7 +17,7 @@
 #define REFRESHFREUENCY 60 // LED refresh frequency
 
 /* Macro definitions of SCD30*/
-#define INIT_TIMES 5 // Number of measurements for initialization. Suggested range: [2,5]
+#define INIT_TIMES 3 // Number of measurements for initialization. Suggested range: [2,5]
 
 /* Define the LCD refresh rate in milliseconds */
 #define LCD_INTERVAL 2000 // The refresh interval is 2 seconds
@@ -86,6 +85,9 @@ void setup() {
   }
   Serial.println("SCD30 Found!");
   pixels.begin();
+  clearLEDMemory();
+  gradualStartup();//graduate light up LED
+  pixels.show();
 }
 
 void loop() {
@@ -97,7 +99,7 @@ void loop() {
       float sensor_val = getSensorData();
       if (isInitialized && defaultCO2 != 0 && defaultTemperature != 0 && defaultHumidity != 0) {
           // LCD and IO update
-          if (currentTime - lastDisplayTime >= LCD_INTERVAL) {
+          if ((currentTime - lastDisplayTime) >= LCD_INTERVAL) {
             displaySensorData();
             lastDisplayTime = currentTime; // Update display time
           }
@@ -306,14 +308,29 @@ void lightingLED(float sen_val) {
     }
 }
 
+// Graduately start up LED
+void gradualStartup() {
+    for (int i = 0; i < NUMPIXELS; i++) {
+        pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // close all the light
+    }
+    pixels.show();
+    delay(500); // make sure the stability
 
-// Stronger smoothing for CO2
-float smoothCO2(float currentCO2) {
-    static float smoothedCO2 = 400; // Initial value
-    const float SMOOTH_FACTOR = 0.02; // Smaller factor for stronger smoothing
-    smoothedCO2 = smoothedCO2 + SMOOTH_FACTOR * (currentCO2 - smoothedCO2);
-    return smoothedCO2;
+    for (int i = 0; i < NUMPIXELS; i++) {
+        pixels.setPixelColor(i, pixels.Color(50, 50, 50)); // light up slowly
+        pixels.show();
+        delay(50); // light up LED one by one
+    }
 }
+
+// clean the LED cache
+void clearLEDMemory() {
+    for (int i = 0; i < NUMPIXELS; i++) {
+        pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // clean color
+    }
+    pixels.show(); // refresh cache
+}
+
 
 
 // LCD and serial monitor IO
@@ -357,3 +374,4 @@ void displaySensorData() {
   // Update displayIndex to scroll to the next data
   displayIndex = (displayIndex + 1) % 3;
 }
+
