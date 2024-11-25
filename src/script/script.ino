@@ -13,7 +13,8 @@
 
 /* Macro definitions of LED */
 #define PIN 13
-#define NUMPIXELS 60
+#define NUMPIXELS 49
+//#define NUMPIXELS 1
 #define REFRESHFREUENCY 60 // LED refresh frequency
 
 /* Macro definitions of SCD30*/
@@ -24,6 +25,9 @@
 
 /* Define the LED refresh rate in milliseconds */
 #define LED_INTERVAL 60
+
+/* Define the buuton pin */
+#define BUTTON_PIN 12
 
 
 
@@ -73,6 +77,10 @@ float last_degrees = -1; // Used to store the angle of the last read, the initia
 void setup() {
   Serial.begin(115200);
 
+  // Button setup
+  pinMode(BUTTON_PIN, INPUT); // Set the button pin as input
+  digitalWrite(BUTTON_PIN, LOW); // Ensure it starts with a defined state
+
   // Encoder 
   pinMode(ROTARY_ANGLE_SENSOR, INPUT); // Set the rotary angle sensor pin as input
   // LCD 
@@ -86,12 +94,18 @@ void setup() {
   Serial.println("SCD30 Found!");
   pixels.begin();
   clearLEDMemory();
-  gradualStartup();//graduate light up LED
+  gradualStartup(); // Gradually light up LED
   pixels.show();
 }
 
 void loop() {
   unsigned long currentTime = millis();
+
+  // Check button state for reset
+  if (digitalRead(BUTTON_PIN) == HIGH) {
+    resetScript(); // Call the reset logic
+    return;
+  }
 
   if (!isDataSelected) { // Waiting for user's datatype choice, default --> CO2
       handleUserSelection();
@@ -107,11 +121,13 @@ void loop() {
           if (currentTime - lastLEDTime >= LED_INTERVAL) {
               lightingLED(sensor_val); // Control the breathing light
               lastLEDTime = currentTime;
-          }
+          //}
       }   
   }
   delay(10); // Short delay to reduce CPU load
 }
+}
+
 /********* ---------------------------------------------------------------------------------------------------------------------------------------------------------------- ********/
 // Encoder logic
 float getEncoderStage(){
@@ -136,7 +152,7 @@ void handleUserSelection() {
     // Check if the angle is stable
     if (abs(currentAngle - lastStableAngle) <= 5) {
         // If the current angle is stable within the range of the last angle
-        if (millis() - stableStartTime > 3000) {
+        if (millis() - stableStartTime > 5000) {
             // If the angle is stable for more than 3 seconds, consider the selection confirmed
             selectedDataType = mapAngleToDataType(currentAngle);
             isDataSelected = true;
@@ -192,12 +208,12 @@ void setInitialData(int init_time) {
         
         //temp
         defaultTemperature = sumTemperature / init_time;
-        MinTemp = defaultTemperature - 15;
-        MaxTemp = defaultTemperature + 15;
+        MinTemp = defaultTemperature - 40;
+        MaxTemp = defaultTemperature + 40;
         //CO2
         defaultCO2 = sumCO2 / init_time;
-        MinCO2 = defaultCO2 - 1000;
-        MaxCO2 = defaultCO2 + 5000;
+        MinCO2 = defaultCO2 - 20000;
+        MaxCO2 = defaultCO2 + 10000;
         //humiditiy
         defaultHumidity = sumHumidity / init_time;
         MinHumid = defaultHumidity - 40;
@@ -215,7 +231,8 @@ void setInitialData(int init_time) {
 
 // Map the Encoder rotation angle to the datatype
 int mapAngleToDataType(float angle) {
-    if (angle >= 0 && angle <= 60) return 1; // Temperature
+  Serial.println(angle);
+    if (angle > 0 && angle <= 60) return 1; // Temperature
     if (angle > 60 && angle <= 120) return 2; // Humidity
     if (angle > 120 && angle <= 210) return 3; // CO2
     return 3; // Default as CO2
@@ -236,6 +253,78 @@ void displaySelectionOnLCD(float angle) {
 }
 
 // LED light logic
+// void lightingLED(float sen_val) {
+//     if (!isInitialized) return; // Skip if not initialized
+
+//     // Breathing effect adjustment
+//     brightness += brightnessDirection * 5;
+//     if (brightness >= 255 || brightness <= 0) {
+//         brightnessDirection *= -1; // Reverse brightness direction
+//     }
+
+//     int tar_color = -1; // Target color intensity
+//     int targetRed = 0, targetGreen = 0, targetBlue = 0; // RGB values
+
+//     if (selectedDataType == 3) { // CO2
+//         // Map CO2 to green-to-red transition
+//         tar_color = map(sen_val, defaultCO2, MaxCO2, 0, 255);
+
+//         // Green to Red transition
+//         targetRed = map(tar_color, 0, 255, 0, 255); // Increase red
+//         targetGreen = map(tar_color, 0, 255, 255, 0); // Decrease green
+//         targetBlue = 0; // No blue in CO2 mode
+//     } else {
+//         // Retain existing logic for temperature and humidity
+//         float hysteresis = (selectedDataType == 1 || selectedDataType == 2) ? 1.5 : 0;
+//         if (selectedDataType == 1) { // Temperature
+//             if (sen_val < defaultTemperature - hysteresis) { // Blue to Green
+//                 tar_color = map(sen_val, MinTemp, defaultTemperature - hysteresis, 255, 0);
+//                 targetRed = 0;
+//                 targetGreen = map(tar_color, 255, 0, 0, 255);
+//                 targetBlue = map(tar_color, 255, 0, 255, 0);
+//             } else if (sen_val > defaultTemperature + hysteresis) { // Green to Red
+//                 tar_color = map(sen_val, defaultTemperature + hysteresis, MaxTemp, 0, 255);
+//                 targetRed = map(tar_color, 0, 255, 0, 255);
+//                 targetGreen = map(tar_color, 0, 255, 255, 0);
+//                 targetBlue = 0;
+//             }
+//         } else if (selectedDataType == 2) { // Humidity
+//             if (sen_val < defaultHumidity - hysteresis) { // Blue to Green
+//                 tar_color = map(sen_val, MinHumid, defaultHumidity - hysteresis, 255, 0);
+//                 targetRed = 0;
+//                 targetGreen = map(tar_color, 255, 0, 0, 255);
+//                 targetBlue = map(tar_color, 255, 0, 255, 0);
+//             } else if (sen_val > defaultHumidity + hysteresis) { // Green to Red
+//                 tar_color = map(sen_val, defaultHumidity + hysteresis, MaxHumid, 0, 255);
+//                 targetRed = map(tar_color, 0, 255, 0, 255);
+//                 targetGreen = map(tar_color, 0, 255, 255, 0);
+//                 targetBlue = 0;
+//             }
+//         }
+//     }
+//     tar_color = constrain(tar_color, 0, 255); // Clamp target color
+
+//     // Smooth color transitions
+//     if (tar_color >= 0) {
+//         static int lastRed = 0, lastGreen = 255, lastBlue = 0;
+//         const float SMOOTH_FACTOR = 0.1; // Smoothing factor
+//         lastRed += (targetRed - lastRed) * SMOOTH_FACTOR;
+//         lastGreen += (targetGreen - lastGreen) * SMOOTH_FACTOR;
+//         lastBlue += (targetBlue - lastBlue) * SMOOTH_FACTOR;
+
+//         // Adjust brightness for breathing effect
+//         int adjustedRed = (lastRed * brightness) / 255;
+//         int adjustedGreen = (lastGreen * brightness) / 255;
+//         int adjustedBlue = (lastBlue * brightness) / 255;
+
+//         // Update LED colors
+//         for (int i = 0; i < NUMPIXELS; i++) {
+//             pixels.setPixelColor(i, pixels.Color(adjustedRed, adjustedGreen, adjustedBlue));
+//         }
+//         pixels.show();
+//     }
+// }
+
 void lightingLED(float sen_val) {
     if (!isInitialized) return; // Skip if not initialized
 
@@ -246,67 +335,70 @@ void lightingLED(float sen_val) {
     }
 
     int tar_color = -1; // Target color intensity
-    int targetRed = 0, targetGreen = 0, targetBlue = 0; // RGB values
+    int targetRed = 0, targetGreen = 0; // RGB values (no blue)
 
-    if (selectedDataType == 3) { // CO2
-        // Map CO2 to green-to-red transition
+    // Define hysteresis for temperature and humidity
+    float hysteresis = (selectedDataType == 1 || selectedDataType == 2) ? 1.5 : 0;
+
+    // CO2 Logic
+    if (selectedDataType == 3) {
         tar_color = map(sen_val, defaultCO2, MaxCO2, 0, 255);
         tar_color = constrain(tar_color, 0, 255); // Clamp target color
 
-        // Green to Red transition
+        // Green to Yellow to Red
         targetRed = map(tar_color, 0, 255, 0, 255); // Increase red
         targetGreen = map(tar_color, 0, 255, 255, 0); // Decrease green
-        targetBlue = 0; // No blue in CO2 mode
-    } else {
-        // Retain existing logic for temperature and humidity
-        float hysteresis = (selectedDataType == 1 || selectedDataType == 2) ? 1.5 : 0;
-        if (selectedDataType == 1) { // Temperature
-            if (sen_val < defaultTemperature - hysteresis) { // Blue to Green
-                tar_color = map(sen_val, MinTemp, defaultTemperature - hysteresis, 255, 0);
-                targetRed = 0;
-                targetGreen = map(tar_color, 255, 0, 0, 255);
-                targetBlue = map(tar_color, 255, 0, 255, 0);
-            } else if (sen_val > defaultTemperature + hysteresis) { // Green to Red
-                tar_color = map(sen_val, defaultTemperature + hysteresis, MaxTemp, 0, 255);
-                targetRed = map(tar_color, 0, 255, 0, 255);
-                targetGreen = map(tar_color, 0, 255, 255, 0);
-                targetBlue = 0;
-            }
-        } else if (selectedDataType == 2) { // Humidity
-            if (sen_val < defaultHumidity - hysteresis) { // Blue to Green
-                tar_color = map(sen_val, MinHumid, defaultHumidity - hysteresis, 255, 0);
-                targetRed = 0;
-                targetGreen = map(tar_color, 255, 0, 0, 255);
-                targetBlue = map(tar_color, 255, 0, 255, 0);
-            } else if (sen_val > defaultHumidity + hysteresis) { // Green to Red
-                tar_color = map(sen_val, defaultHumidity + hysteresis, MaxHumid, 0, 255);
-                targetRed = map(tar_color, 0, 255, 0, 255);
-                targetGreen = map(tar_color, 0, 255, 255, 0);
-                targetBlue = 0;
-            }
+    }
+    // Temperature Logic
+    else if (selectedDataType == 1) {
+        if (sen_val < defaultTemperature - hysteresis) { // Green
+            tar_color = 0;
+        } else if (sen_val > defaultTemperature + hysteresis) { // Red
+            tar_color = 255;
+        } else { // Yellow range
+            tar_color = map(sen_val, defaultTemperature - hysteresis, defaultTemperature + hysteresis, 0, 255);
         }
+        tar_color = constrain(tar_color, 0, 255);
+
+        // Green to Yellow to Red
+        targetRed = map(tar_color, 0, 255, 0, 255); // Increase red
+        targetGreen = map(tar_color, 0, 255, 255, 0); // Decrease green
+    }
+    // Humidity Logic
+    else if (selectedDataType == 2) {
+        if (sen_val < defaultHumidity - hysteresis) { // Green
+            tar_color = 0;
+        } else if (sen_val > defaultHumidity + hysteresis) { // Red
+            tar_color = 255;
+        } else { // Yellow range
+            tar_color = map(sen_val, defaultHumidity - hysteresis, defaultHumidity + hysteresis, 0, 255);
+        }
+        tar_color = constrain(tar_color, 0, 255);
+
+        // Green to Yellow to Red
+        targetRed = map(tar_color, 0, 255, 0, 255); // Increase red
+        targetGreen = map(tar_color, 0, 255, 255, 0); // Decrease green
     }
 
     // Smooth color transitions
     if (tar_color >= 0) {
-        static int lastRed = 0, lastGreen = 255, lastBlue = 0;
+        static int lastRed = 0, lastGreen = 255; // No blue component
         const float SMOOTH_FACTOR = 0.1; // Smoothing factor
         lastRed += (targetRed - lastRed) * SMOOTH_FACTOR;
         lastGreen += (targetGreen - lastGreen) * SMOOTH_FACTOR;
-        lastBlue += (targetBlue - lastBlue) * SMOOTH_FACTOR;
 
         // Adjust brightness for breathing effect
         int adjustedRed = (lastRed * brightness) / 255;
         int adjustedGreen = (lastGreen * brightness) / 255;
-        int adjustedBlue = (lastBlue * brightness) / 255;
 
         // Update LED colors
         for (int i = 0; i < NUMPIXELS; i++) {
-            pixels.setPixelColor(i, pixels.Color(adjustedRed, adjustedGreen, adjustedBlue));
+            pixels.setPixelColor(i, pixels.Color(adjustedRed, adjustedGreen, 0)); // Blue is always 0
         }
         pixels.show();
     }
 }
+
 
 // Graduately start up LED
 void gradualStartup() {
@@ -323,15 +415,49 @@ void gradualStartup() {
     }
 }
 
+// Reset logic
+void resetScript() {
+  Serial.println("Resetting Script...");
+
+  // Clear flags and variables
+  isDataSelected = false; // Allow parameter selection
+  isInitialized = false; // Prevent immediate initialization
+  dataCount = 0; 
+  sumCO2 = sumTemperature = sumHumidity = 0;
+
+  // Reset LEDs and display
+  clearLEDMemory();
+  gradualStartup();
+  // lcd.clear();
+  // lcd.print("Resetting...");
+  Serial.println("Reset complete. Please select a new parameter.");
+  // Serial.println("Resetting Script...");
+
+  // // Clear flags and variables
+  // isDataSelected = false;
+  // isInitialized = false;
+  // dataCount = 0;
+  // sumCO2 = sumTemperature = sumHumidity = 0;
+
+  // // Reset display
+  // lcd.clear();
+  // lcd.print("Resetting...");
+
+  // // Reset LEDs
+  // clearLEDMemory();
+  // gradualStartup();
+
+  // delay(500); // Allow time for reset indication
+  // Serial.println("Reset complete. Please select a new parameter.");
+}
+
 // clean the LED cache
-void clearLEDMemory() {
+void clearLEDMemory(){
     for (int i = 0; i < NUMPIXELS; i++) {
         pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // clean color
     }
     pixels.show(); // refresh cache
 }
-
-
 
 // LCD and serial monitor IO
 void displaySensorData() {
