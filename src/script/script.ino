@@ -428,27 +428,7 @@ void resetScript() {
   // Reset LEDs and display
   clearLEDMemory();
   gradualStartup();
-  // lcd.clear();
-  // lcd.print("Resetting...");
   Serial.println("Reset complete. Please select a new parameter.");
-  // Serial.println("Resetting Script...");
-
-  // // Clear flags and variables
-  // isDataSelected = false;
-  // isInitialized = false;
-  // dataCount = 0;
-  // sumCO2 = sumTemperature = sumHumidity = 0;
-
-  // // Reset display
-  // lcd.clear();
-  // lcd.print("Resetting...");
-
-  // // Reset LEDs
-  // clearLEDMemory();
-  // gradualStartup();
-
-  // delay(500); // Allow time for reset indication
-  // Serial.println("Reset complete. Please select a new parameter.");
 }
 
 // clean the LED cache
