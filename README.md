@@ -13,8 +13,10 @@
 6. [Building Process](#building-process)
 7. [Reflection](#reflection)
 
-## NOVA 💡
-**NOVA** is your personal "supernova" (without the explosions). Supernovas light up the universe, and NOVA lights up your desk—with less heat and chaos!
+## <span style="color:blue;">N</span><span style="color:green;">O</span><span style="color:yellow;">V</span><span style="color:red;">A</span>  💡
+<span style="color:blue;">N</span><span style="color:green;">O</span><span style="color:yellow;">V</span><span style="color:red;">A</span> is your personal "supernova" (without the explosions). Supernovas light up the universe, and NOVA lights up your desk—with less heat and chaos!
+
+*What is <span style="color:blue;">N</span><span style="color:green;">O</span><span style="color:yellow;">V</span><span style="color:red;">A</span>  exactly?*
 
 **NOVA is an intelligent lighting system that adapts to user preferences, visually reflecting real-time environmental data through dynamic light displays, seamlessly enhancing both functionality and ambiance in any workspace.**
 
