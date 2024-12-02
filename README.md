@@ -1,6 +1,6 @@
 # CASA0016: Making, Designing & Building Connected Sensor Systems: NOVA
 <p align="center">
-  <img src="images/nova.png" alt="NOVA" width="300">
+  <img src="images/nova.png" alt="NOVA" width="1000">
 </p>
 
 ## Table of Contents
