@@ -1,7 +1,8 @@
 # CASA0016: Making, Designing & Building Connected Sensor Systems: NOVA
 <p align="center">
-  <img src="images/nova.png" alt="NOVA" width="1000">
+  <img src="images/img_nova.png" alt="NOVA" width="800">
 </p>
+
 
 ## Table of Contents
 
@@ -26,7 +27,7 @@
 Supernovas are explosive phenomena that occur when stars die, releasing massive energy in an instant, sometimes outshining entire galaxies. Drawing inspiration from this celestial event.
 
 ### Indoor Environmental Quality (IEQ)
-Indoor Environmental Quality (IEQ) is a critical aspect of modern workspace design, focusing on creating environments that enhance well-being and productivity. Learn more at BRE [Indoor Environmental Quality](https://bre.ac/indoor-environmental-quality/).
+Indoor Environmental Quality (IEQ) is a critical aspect of modern workspace design, focusing on creating environments that enhance well-being and productivity. Four critical domains IEQ focus: **Air Quality**, **Visual Comfort**, **Thermal Comfort**, **Acoustic Comfort**. Learn more at BRE [Indoor Environmental Quality](https://bre.ac/indoor-environmental-quality/).
 
 ### Calm Technology
 Calm Technology represents a transformative approach in the digital realm, emphasizing minimalistic and seamless interactions with devices. It focuses on creating technology that supports users efficiently without constantly demanding their attention.
@@ -42,12 +43,15 @@ Calm Technology represents a transformative approach in the digital realm, empha
 - **Customizability**: Allows personalized settings to suit your environment.
 
 ## Schematics
-
 ### **Hardware Configuration**
-- **Board**: [The Things Uno (Arduino Leonardo)](https://docs.arduino.cc/hardware/leonardo/)
-- **Sensors**: [SCD30](https://learn.adafruit.com/adafruit-scd30) (CO2, Temperature, Humidity)
-- **Actuators**: [LCD](https://docs.arduino.cc/learn/electronics/lcd-displays/), [LED](https://thepihut.com/products/flexible-rgb-led-strip-neopixel-ws2812-sk6812-compatible-60-led-meter)
-- **User Input Device**: [Rotary Encoder](https://wiki.seeedstudio.com/Grove-Rotary_Angle_Sensor/#platforms-supported)
+| Components         | Number | Description                                                                                                                                                                  | Link |
+|---------------------|--------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|
+| Arduino Uno         | <div align="center">1</div>      | <div align="center">-</div>                                                                                                                                                 | [The Things Uno (Arduino Leonardo)](https://docs.arduino.cc/hardware/leonardo/)  |
+| Rotary Encoder      | <div align="center">1</div>       | <div align="center">-</div>                                                                                                                                                 | [Rotary Encoder](https://wiki.seeedstudio.com/Grove-Rotary_Angle_Sensor/#platforms-supported)  |
+| SCD30              | <div align="center">1</div>       | - **Temperature**<br>      - Unit: °C<br>   - Represents <span style="color:red;">**IEQ - Thermal comfort**</span><br><br>- **CO2**<br>     - Unit: ppm (parts per million)<br>   - Represents <span style="color:red;">**IEQ - Air quality**</span><br><br>- **Humidity**<br>      - Unit: %RH<br>   - Represents <span style="color:red;">**IEQ - Thermal comfort**</span> | [SCD30](https://learn.adafruit.com/adafruit-scd30)|
+| NeoPixel Strip 60   | <div align="center">1</div>       | - Set the current environment data as default (<span style="color:green;">**green**</span>). If the data decreases, the LED shifts to <span style="color:blue;">**blue**</span>; if it increases, the LED shifts to <span style="color:yellow;">**yellow**</span>, eventually reaching <span style="color:red;">**red**</span>. <br> - Represents **IEQ - Visual comfort**| [LED](https://thepihut.com/products/flexible-rgb-led-strip-neopixel-ws2812-sk6812-compatible-60-led-meter)  |
+| LCD 16x2            | <div align="center">1</div>       | Show real-time data                                                                                                                                                        | [LCD](https://docs.arduino.cc/learn/electronics/lcd-displays/)  |
+
 
 ![Schematics](images/schematic.png)
 
