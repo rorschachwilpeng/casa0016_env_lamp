@@ -57,9 +57,10 @@ Calm Technology represents a transformative approach in the digital realm, empha
 
 ## System Design
 
-<p align="center">
+![Schematics](images/system_design.png)
+<!-- <p align="center">
   <img src="images/system_design.png" alt="NOVA System" width="500">
-</p>
+</p> -->
 
 
 The system operates with two main functionalities: **start/reset** and **initialization**. Users can either start fresh, reset the system, or directly interact with specific environmental parameters.
