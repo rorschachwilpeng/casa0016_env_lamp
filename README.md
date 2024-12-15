@@ -32,6 +32,12 @@ Indoor Environmental Quality (IEQ) is a critical aspect of modern workspace desi
 ### Calm Technology
 Calm Technology represents a transformative approach in the digital realm, emphasizing minimalistic and seamless interactions with devices. It focuses on creating technology that supports users efficiently without constantly demanding their attention.
 
+*Why we need NOVA?*
+- The quality of indoor environments significantly impacts the well-being and efficiency of office professionals, emphasizing the importance of IEQ.
+- Traditional monitoring devices are often simplistic or intrusive, highlighting the need for calm technology that supports users unobtrusively.
+- This project proposes a smart environmental lighting system based on calm technology principles to provide customizable, visually comfortable notifications of indoor environmental conditions.
+
+
 **References:**
 - [Indoor Environmental Quality (BRE)](https://bre.ac/indoor-environmental-quality/)
 - [Calm Technology (Calmtech)](https://calmtech.com/)
